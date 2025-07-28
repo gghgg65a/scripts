@@ -1,0 +1,1952 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "the billy wigger",
+    LoadingTitle = "the billy wigger",
+    LoadingSubtitle = "by gghgg65a",
+    Theme = "Default",
+    ConfigurationSaving = {
+       Enabled = true,
+       FolderName = nil,
+       FileName = "Big Hub"
+    },
+    Discord = {
+       Enabled = false,
+       Invite = "noinvitelink",
+       RememberJoins = true
+    },
+    KeySystem = false,
+    KeySettings = {
+       Title = "Untitled",
+       Subtitle = "Key System",
+       Note = "No method of obtaining the key is provided",
+       FileName = "Key",
+       SaveKey = true,
+       GrabKeyFromSite = false,
+       Key = {"Hello"}
+    }
+})
+
+local MainTab = Window:CreateTab("Main", "apple")
+local AutoTab = Window:CreateTab("Automation", "repeat")
+local UItab = Window:CreateTab("Visuals", "eye")
+local ThemesTab = Window:CreateTab("Themes", 4483362458)
+local SettingsTab = Window:CreateTab("Settings", "settings")
+local UpdatesTab = Window:CreateTab("Updates", 4483362458)
+
+local SettingsConfigSection = SettingsTab:CreateSection("Config Settings")
+-- Add a button to save the current configuration
+local SaveButton = SettingsTab:CreateButton({
+    Name = "Save Current Configuration",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+        Rayfield:Notify({
+            Title = "Configuration Saved!",
+            Content = "Your settings have been saved successfully.",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Add a button to load the saved configuration
+local LoadButton = SettingsTab:CreateButton({
+    Name = "Load Saved Configuration",
+    Callback = function()
+        Rayfield:LoadConfiguration()
+        Rayfield:Notify({
+            Title = "Configuration Loaded",
+            Content = "Your settings have been loaded successfully.",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Theme Selector Dropdown
+local ThemeDropdown = ThemesTab:CreateDropdown({
+    Name = "Select Theme",
+    Options = {
+        "Default", 
+        "Amber Glow", 
+        "Amethyst", 
+        "Bloom", 
+        "Dark Blue", 
+        "Green", 
+        "Light", 
+        "Ocean", 
+        "Serenity"
+    },
+    CurrentOption = {"Default"},
+    MultipleOptions = false,
+    Flag = "ThemeSelector",
+    Callback = function(Selected)
+        local themeMap = {
+            ["Default"] = "Default",
+            ["Amber Glow"] = "AmberGlow",
+            ["Amethyst"] = "Amethyst",
+            ["Bloom"] = "Bloom",
+            ["Dark Blue"] = "DarkBlue",
+            ["Green"] = "Green",
+            ["Light"] = "Light",
+            ["Ocean"] = "Ocean",
+            ["Serenity"] = "Serenity"
+        }
+        
+        local themeIdentifier = themeMap[Selected[1]]
+        Window.ModifyTheme(themeIdentifier)
+    end,
+ })
+
+local Label = UpdatesTab:CreateLabel("fixed ESP fps bug", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+local Label = UpdatesTab:CreateLabel("able to save a config in settings tab", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+local Label = UpdatesTab:CreateLabel("Fixed themes", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+
+-- ESP Settings
+local espSettings = {
+    Enabled = false,
+    ShowNames = true,
+    ShowEveryone = false,
+    ShowDot = true,
+    DotSize = 4,
+    NameSize = 18,
+    BoxColor = Color3.new(1, 0, 0),
+    NameColor = Color3.new(1, 1, 1),
+    DotColor = Color3.new(1, 1, 0),
+    RainbowMode = false,
+    RainbowSpeed = 1,
+    ToggleInterval = 5, -- Time between toggles (seconds)
+    ToggleDuration = 0.1 -- How long ESP stays off during toggle (seconds)
+}
+
+local espObjects = {}
+local playerConnections = {} -- Table to store player connections
+local rainbowHue = 0
+local toggleConnection = nil
+local espVisible = true -- Track current visibility state
+
+-- Rainbow color generator
+local function getRainbowColor(hue)
+    return Color3.fromHSV(hue, 1, 1)
+end
+
+-- Update rainbow effect
+local rainbowConnection = game:GetService("RunService").Heartbeat:Connect(function(delta)
+    if espSettings.RainbowMode then
+        rainbowHue = (rainbowHue + delta * 0.25 * espSettings.RainbowSpeed) % 1
+        for _, data in pairs(espObjects) do
+            if data.box then
+                data.box.Color = getRainbowColor(rainbowHue)
+            end
+            if data.dot then
+                data.dot.Color = getRainbowColor(rainbowHue)
+            end
+        end
+    end
+end)
+
+-- Check if Drawing is supported
+local function isDrawingSupported()
+    local success, _ = pcall(function()
+        return Drawing.new("Square")
+    end)
+    return success
+end
+
+local function createEsp(player)
+    if not isDrawingSupported() then
+        warn("Drawing library not supported in this environment!")
+        return
+    end
+
+    -- Clean up any existing connection for this player
+    if playerConnections[player] then
+        playerConnections[player]:Disconnect()
+        playerConnections[player] = nil
+    end
+
+    -- Wait for character to exist
+    local character = player.Character
+    if not character then
+        playerConnections[player] = player.CharacterAdded:Connect(function(newChar)
+            character = newChar
+            createEsp(player) -- Retry now that character exists
+        end)
+        return
+    end
+
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart", 5) -- Wait up to 5 seconds
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    local head = character:WaitForChild("Head", 5)
+    if not humanoidRootPart or not humanoid or not head then return end
+
+    -- Create ESP Box
+    local espBox = Drawing.new("Square")
+    espBox.Visible = false
+    espBox.Color = espSettings.RainbowMode and getRainbowColor(rainbowHue) or espSettings.BoxColor
+    espBox.Thickness = 1
+    espBox.Filled = false
+    espBox.ZIndex = 1
+
+    -- Create Name Tag
+    local nameTag = Drawing.new("Text")
+    nameTag.Visible = false
+    nameTag.Color = espSettings.NameColor
+    nameTag.Size = espSettings.NameSize
+    nameTag.Center = true
+    nameTag.Outline = true
+    nameTag.OutlineColor = Color3.new(0, 0, 0)
+    nameTag.Text = player.Name
+    nameTag.ZIndex = 2
+
+    -- Create Head Dot
+    local headDot = Drawing.new("Circle")
+    headDot.Visible = false
+    headDot.Color = espSettings.RainbowMode and getRainbowColor(rainbowHue) or espSettings.DotColor
+    headDot.Thickness = 1
+    headDot.Filled = true
+    headDot.Transparency = 1
+    headDot.Radius = espSettings.DotSize
+    headDot.ZIndex = 3
+
+    espObjects[player] = {
+        box = espBox,
+        name = nameTag,
+        dot = headDot,
+        character = character,
+        connection = character:GetPropertyChangedSignal("Parent"):Connect(function()
+            if not character.Parent then
+                espBox:Remove()
+                nameTag:Remove()
+                headDot:Remove()
+                espObjects[player] = nil
+            end
+        end)
+    }
+
+    local function updateEsp()
+        if not espSettings.Enabled or not character or not humanoidRootPart or humanoid.Health <= 0 then
+            espBox.Visible = false
+            nameTag.Visible = false
+            headDot.Visible = false
+            return
+        end
+
+        -- Skip team check if ShowEveryone is enabled
+        if not espSettings.ShowEveryone then
+            -- Team check (skip if game has no teams)
+            local localPlayer = game.Players.LocalPlayer
+            if player.Team and localPlayer.Team and player.Team == localPlayer.Team then
+                espBox.Visible = false
+                nameTag.Visible = false
+                headDot.Visible = false
+                return
+            end
+        end
+
+        local rootPosition, rootVisible = workspace.CurrentCamera:WorldToViewportPoint(humanoidRootPart.Position)
+        local headPosition, headVisible = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+        
+        if rootVisible then
+            -- Calculate box size
+            local size = (workspace.CurrentCamera:WorldToViewportPoint(humanoidRootPart.Position - Vector3.new(0, 3, 0))).Y - 
+                         (workspace.CurrentCamera:WorldToViewportPoint(humanoidRootPart.Position + Vector3.new(0, 2.5, 0))).Y
+            local scale = math.abs(size / 2)
+            
+            -- Update box
+            espBox.Size = Vector2.new(scale * 1.5, scale * 1.9)
+            espBox.Position = Vector2.new(rootPosition.X - espBox.Size.X / 2, rootPosition.Y - espBox.Size.Y / 2)
+            espBox.Visible = espVisible and true
+
+            -- Update name tag
+            nameTag.Size = espSettings.NameSize
+            nameTag.Position = Vector2.new(rootPosition.X, rootPosition.Y - espBox.Size.Y / 2 - 20)
+            nameTag.Visible = espVisible and espSettings.ShowNames
+            
+            -- Update head dot
+            if headVisible and espSettings.ShowDot then
+                headDot.Position = Vector2.new(headPosition.X, headPosition.Y)
+                headDot.Radius = espSettings.DotSize
+                headDot.Visible = espVisible and true
+            else
+                headDot.Visible = false
+            end
+        else
+            espBox.Visible = false
+            nameTag.Visible = false
+            headDot.Visible = false
+        end
+    end
+
+    game:GetService("RunService").RenderStepped:Connect(updateEsp)
+end
+
+local function removeEsp(player)
+    if espObjects[player] then
+        if espObjects[player].box then espObjects[player].box:Remove() end
+        if espObjects[player].name then espObjects[player].name:Remove() end
+        if espObjects[player].dot then espObjects[player].dot:Remove() end
+        if espObjects[player].connection then espObjects[player].connection:Disconnect() end
+        espObjects[player] = nil
+    end
+end
+
+local function updateAllEsp()
+    for player, data in pairs(espObjects) do
+        if data.box then
+            data.box.Color = espSettings.RainbowMode and getRainbowColor(rainbowHue) or espSettings.BoxColor
+        end
+        if data.name then
+            data.name.Size = espSettings.NameSize
+            data.name.Visible = espVisible and espSettings.ShowNames and espSettings.Enabled
+        end
+        if data.dot then
+            data.dot.Color = espSettings.RainbowMode and getRainbowColor(rainbowHue) or espSettings.DotColor
+            data.dot.Visible = espVisible and espSettings.ShowDot and espSettings.Enabled
+            data.dot.Radius = espSettings.DotSize
+        end
+    end
+end
+
+-- Function to toggle ESP visibility quickly
+local function toggleEspVisibility()
+    if not espSettings.Enabled then return end
+    
+    -- Toggle visibility
+    espVisible = not espVisible
+    updateAllEsp()
+    
+    -- If we just turned it off, schedule turning it back on
+    if not espVisible then
+        task.delay(espSettings.ToggleDuration, function()
+            espVisible = true
+            updateAllEsp()
+        end)
+    end
+end
+
+-- Function to start/restart the toggle loop
+local function startToggleLoop()
+    if toggleConnection then
+        toggleConnection:Disconnect()
+    end
+    
+    toggleConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        -- We'll manage the timing ourselves for more precision
+    end)
+    
+    -- Start the toggle loop in a separate thread
+    coroutine.wrap(function()
+        while espSettings.Enabled and toggleConnection do
+            toggleEspVisibility()
+            wait(espSettings.ToggleInterval)
+        end
+    end)()
+end
+
+-- Player added handler
+local function onPlayerAdded(player)
+    if player ~= game.Players.LocalPlayer then
+        playerConnections[player] = player.CharacterAdded:Connect(function(character)
+            if espSettings.Enabled then
+                createEsp(player)
+            end
+        end)
+        
+        if player.Character and espSettings.Enabled then
+            createEsp(player)
+        end
+    end
+end
+
+local function setupEsp()
+    -- Clear existing connections
+    for player, connection in pairs(playerConnections) do
+        connection:Disconnect()
+    end
+    playerConnections = {}
+    
+    -- Setup ESP for existing players
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            coroutine.wrap(function()
+                if espSettings.Enabled then
+                    createEsp(player)
+                else
+                    removeEsp(player)
+                end
+            end)()
+        end
+    end
+    
+    if espSettings.Enabled then
+        espVisible = true -- Reset visibility when enabling
+        startToggleLoop()
+    elseif toggleConnection then
+        toggleConnection:Disconnect()
+        toggleConnection = nil
+    end
+end
+
+-- Main ESP Toggle
+local WallhackSection = UItab:CreateSection("ESP settings")
+UItab:CreateToggle({
+    Name = "ESP",
+    CurrentValue = espSettings.Enabled,
+    Flag = "ESPEnabled",
+    Callback = function(Value)
+        espSettings.Enabled = Value
+        setupEsp()
+    end,
+})
+
+-- Show Everyone Toggle
+UItab:CreateToggle({
+    Name = "Show Everyone",
+    CurrentValue = espSettings.ShowEveryone,
+    Flag = "ShowEveryone",
+    Callback = function(Value)
+        espSettings.ShowEveryone = Value
+        updateAllEsp()
+    end,
+})
+
+-- Head Dot Toggle
+UItab:CreateToggle({
+    Name = "Head Dot",
+    CurrentValue = espSettings.ShowDot,
+    Flag = "ShowDot",
+    Callback = function(Value)
+        espSettings.ShowDot = Value
+        updateAllEsp()
+    end,
+})
+
+-- Dot Size Slider
+UItab:CreateSlider({
+    Name = "Dot Size",
+    Range = {2, 10},
+    Increment = 1,
+    Suffix = "px",
+    CurrentValue = espSettings.DotSize,
+    Flag = "DotSize",
+    Callback = function(Value)
+        espSettings.DotSize = Value
+        updateAllEsp()
+    end,
+})
+
+-- Nametag Toggle
+UItab:CreateToggle({
+    Name = "NameTags",
+    CurrentValue = espSettings.ShowNames,
+    Flag = "NameTagsEnabled",
+    Callback = function(Value)
+        espSettings.ShowNames = Value
+        updateAllEsp()
+    end,
+})
+
+-- Nametag Size Slider
+UItab:CreateSlider({
+    Name = "NameTag Size",
+    Range = {10, 30},
+    Increment = 1,
+    Suffix = "px",
+    CurrentValue = espSettings.NameSize,
+    Flag = "NameTagSize",
+    Callback = function(Value)
+        espSettings.NameSize = Value
+        updateAllEsp()
+    end,
+})
+
+-- ESP Color Picker
+UItab:CreateColorPicker({
+    Name = "ESP Color",
+    Color = espSettings.BoxColor,
+    Flag = "ESPColor",
+    Callback = function(Value)
+        espSettings.BoxColor = Value
+        if not espSettings.RainbowMode then
+            updateAllEsp()
+        end
+    end
+})
+
+-- Dot Color Picker
+UItab:CreateColorPicker({
+    Name = "Dot Color",
+    Color = espSettings.DotColor,
+    Flag = "DotColor",
+    Callback = function(Value)
+        espSettings.DotColor = Value
+        if not espSettings.RainbowMode then
+            updateAllEsp()
+        end
+    end
+})
+
+-- Rainbow Mode Toggle
+UItab:CreateToggle({
+    Name = "Rainbow ESP",
+    CurrentValue = espSettings.RainbowMode,
+    Flag = "RainbowMode",
+    Callback = function(Value)
+        espSettings.RainbowMode = Value
+        updateAllEsp()
+    end,
+})
+
+-- Rainbow Speed Slider
+UItab:CreateSlider({
+    Name = "Rainbow Speed",
+    Range = {0.5, 3},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = espSettings.RainbowSpeed,
+    Flag = "RainbowSpeed",
+    Callback = function(Value)
+        espSettings.RainbowSpeed = Value
+    end,
+})
+
+-- ESP Toggle Interval Slider
+UItab:CreateSlider({
+    Name = "ESP Toggle Interval",
+    Range = {0.1, 10}, -- 0.1 to 10 seconds
+    Increment = 0.1,
+    Suffix = "sec",
+    CurrentValue = espSettings.ToggleInterval,
+    Flag = "ToggleInterval",
+    Callback = function(Value)
+        espSettings.ToggleInterval = Value
+        if espSettings.Enabled then
+            startToggleLoop() -- Restart the loop with new interval
+        end
+    end,
+})
+
+-- ESP Toggle Duration Slider
+UItab:CreateSlider({
+    Name = "ESP Off Duration",
+    Range = {0.05, 1}, -- 0.05 to 1 seconds
+    Increment = 0.05,
+    Suffix = "sec",
+    CurrentValue = espSettings.ToggleDuration,
+    Flag = "ToggleDuration",
+    Callback = function(Value)
+        espSettings.ToggleDuration = Value
+    end,
+})
+
+-- Player handlers
+game.Players.PlayerAdded:Connect(onPlayerAdded)
+
+game.Players.PlayerRemoving:Connect(function(player)
+    if playerConnections[player] then
+        playerConnections[player]:Disconnect()
+        playerConnections[player] = nil
+    end
+    removeEsp(player)
+end)
+
+-- Initial setup
+setupEsp()
+
+-- Create elements with topmost display priority
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BouncingText"
+screenGui.Enabled = false
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Ensures proper layering
+screenGui.DisplayOrder = 999 -- Highest possible display priority
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local textContainer = Instance.new("Frame")
+textContainer.BackgroundTransparency = 1
+textContainer.Size = UDim2.new(0, 200, 0, 80)
+textContainer.Parent = screenGui
+
+local bouncingText = Instance.new("TextLabel")
+bouncingText.Text = "HELLO"
+bouncingText.Size = UDim2.new(1, 0, 1, 0)
+bouncingText.BackgroundTransparency = 1
+bouncingText.TextScaled = true
+bouncingText.Font = Enum.Font.Fantasy
+bouncingText.TextColor3 = Color3.fromRGB(255, 100, 100)
+bouncingText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+bouncingText.TextStrokeTransparency = 0.5
+bouncingText.TextSize = 48
+bouncingText.ZIndex = 2 -- Higher than container
+bouncingText.Parent = textContainer
+
+-- Physics variables
+local BASE_SPEED = 0.5
+local velocity = Vector2.new(0, 0)
+local position = Vector2.new(0.5, 0.5)
+local rotation = 0
+local rotationSpeed = 0
+local isActive = false
+local rotationEnabled = true
+local viewportSize = workspace.CurrentCamera.ViewportSize
+
+-- Function to get a pleasant random color
+local function getRandomColor()
+    local colors = {
+        Color3.fromRGB(255, 100, 100),
+        Color3.fromRGB(100, 255, 100),
+        Color3.fromRGB(100, 100, 255),
+        Color3.fromRGB(255, 255, 100),
+        Color3.fromRGB(255, 100, 255),
+        Color3.fromRGB(100, 255, 255)
+    }
+    return colors[math.random(1, #colors)]
+end
+
+-- Function to initialize movement
+local function initializeMovement()
+    velocity = Vector2.new(math.random(-100, 100), math.random(-100, 100)).Unit * BASE_SPEED
+    rotationSpeed = rotationEnabled and math.random(30, 60) or 0
+    position = Vector2.new(0.5, 0.5)
+end
+
+-- Function to update position
+local function updatePosition(dt)
+    if not isActive then return end
+    
+    position = position + (velocity * dt)
+    
+    local textSize = textContainer.AbsoluteSize
+    local halfSize = textSize / 2
+    
+    -- Boundary checks
+    if position.X * viewportSize.X + halfSize.X > viewportSize.X then
+        position = Vector2.new((viewportSize.X - halfSize.X) / viewportSize.X, position.Y)
+        velocity = Vector2.new(-math.abs(velocity.X), velocity.Y)
+        bouncingText.TextColor3 = getRandomColor()
+    end
+    
+    if position.X * viewportSize.X - halfSize.X < 0 then
+        position = Vector2.new(halfSize.X / viewportSize.X, position.Y)
+        velocity = Vector2.new(math.abs(velocity.X), velocity.Y)
+        bouncingText.TextColor3 = getRandomColor()
+    end
+    
+    if position.Y * viewportSize.Y + halfSize.Y > viewportSize.Y then
+        position = Vector2.new(position.X, (viewportSize.Y - halfSize.Y) / viewportSize.Y)
+        velocity = Vector2.new(velocity.X, -math.abs(velocity.Y))
+        bouncingText.TextColor3 = getRandomColor()
+    end
+    
+    if position.Y * viewportSize.Y - halfSize.Y < 0 then
+        position = Vector2.new(position.X, halfSize.Y / viewportSize.Y)
+        velocity = Vector2.new(velocity.X, math.abs(velocity.Y))
+        bouncingText.TextColor3 = getRandomColor()
+    end
+    
+    -- Update rotation if enabled
+    if rotationEnabled then
+        rotation = rotation + rotationSpeed * dt
+        if rotation > 360 then rotation = rotation - 360 end
+        if rotation < 0 then rotation = rotation + 360 end
+        textContainer.Rotation = rotation
+    end
+    
+    textContainer.Position = UDim2.new(0, position.X * viewportSize.X - halfSize.X, 0, position.Y * viewportSize.Y - halfSize.Y)
+end
+
+-- Heartbeat connection
+local lastTime = tick()
+game:GetService("RunService").Heartbeat:Connect(function()
+    local currentTime = tick()
+    local deltaTime = currentTime - lastTime
+    lastTime = currentTime
+    updatePosition(deltaTime)
+end)
+
+-- UI Controls
+local ControlsSection = UItab:CreateSection("Bouncing Text Controls")
+
+-- Add text input first
+local TextInput = UItab:CreateInput({
+    Name = "Bouncing Text",
+    CurrentValue = "SOUR PATCH THE GOAT",
+    PlaceholderText = "Enter text to bounce",
+    RemoveTextAfterFocusLost = false,
+    Flag = "TextInput",
+    Callback = function(Text)
+        bouncingText.Text = Text or "HELLO"
+    end,
+})
+
+local Toggle = UItab:CreateToggle({
+    Name = "Enable Bouncing Text",
+    CurrentValue = false,
+    Flag = "BouncingToggle",
+    Callback = function(Value)
+        isActive = Value
+        screenGui.Enabled = Value
+        if Value then
+            initializeMovement()
+        else
+            textContainer.Position = UDim2.new(0.5, -100, 0.5, -40)
+            textContainer.Rotation = 0
+        end
+    end,
+})
+
+local RotationToggle = UItab:CreateToggle({
+    Name = "Enable Rotation",
+    CurrentValue = true,
+    Flag = "RotationToggle",
+    Callback = function(Value)
+        rotationEnabled = Value
+        if not Value then
+            textContainer.Rotation = 0
+        elseif isActive then
+            rotationSpeed = math.random(30, 60)
+        end
+    end,
+})
+
+local SpeedSlider = UItab:CreateSlider({
+    Name = "Movement Speed",
+    Range = {0.1, 10},
+    Increment = 0.1,
+    Suffix = "speed",
+    CurrentValue = BASE_SPEED,
+    Flag = "SpeedSlider",
+    Callback = function(value)
+        if velocity.Magnitude > 0 then
+            velocity = velocity.Unit * value
+        end
+        BASE_SPEED = value
+    end,
+})
+
+local RotationSlider = UItab:CreateSlider({
+    Name = "Rotation Speed",
+    Range = {-120, 120},
+    Increment = 5,
+    Suffix = "deg/s",
+    CurrentValue = 0,
+    Flag = "RotationSlider",
+    Callback = function(value)
+        rotationSpeed = value
+    end,
+})
+
+local ResetButton = UItab:CreateButton({
+    Name = "Reset Position",
+    Callback = function()
+        if isActive then
+            initializeMovement()
+        end
+    end,
+})
+
+--Aimbot
+local AimbotSection = AutoTab:CreateSection("Aibmot")
+
+-- Services
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local TS = game:GetService("TweenService")
+
+-- Variables
+local camera = workspace.CurrentCamera
+local localPlayer = Players.LocalPlayer
+local aimTween = nil
+local lastTarget = nil
+
+-- Keybind system
+local currentKeybind = Enum.UserInputType.MouseButton2
+local isListeningForInput = false
+
+-- Create keybind selector
+local KeybindSelector = AutoTab:CreateKeybind({
+    Name = "Aim Assist Keybind",
+    CurrentKeybind = "Right Mouse Button",
+    HoldToInteract = false,
+    Flag = "AimAssistKeybind",
+    Callback = function(Keybind)
+        -- This just shows the current keybind, actual changing happens in the input listener
+    end,
+})
+
+-- Create button to change keybind
+local ChangeKeybindButton = AutoTab:CreateButton({
+    Name = "Click to Change Keybind",
+    Callback = function()
+        isListeningForInput = true
+        Rayfield:Notify({
+            Title = "Keybind Change",
+            Content = "Press any key or mouse button to set as the new aim key",
+            Duration = 5,
+            Image = nil,
+            Actions = {
+                Cancel = {
+                    Name = "Cancel",
+                    Callback = function()
+                        isListeningForInput = false
+                    end
+                },
+            },
+        })
+    end,
+})
+
+-- Input listener for keybind change
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if isListeningForInput and not gameProcessed then
+        -- Check if the input is a mouse button or keyboard key
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            currentKeybind = Enum.UserInputType.MouseButton1
+            KeybindSelector:Set("Left Mouse Button")
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            currentKeybind = Enum.UserInputType.MouseButton2
+            KeybindSelector:Set("Right Mouse Button")
+        elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
+            currentKeybind = Enum.UserInputType.MouseButton3
+            KeybindSelector:Set("Middle Mouse Button")
+        elseif input.KeyCode ~= Enum.KeyCode.Unknown then
+            currentKeybind = input.KeyCode
+            KeybindSelector:Set(input.KeyCode.Name)
+        end
+        
+        isListeningForInput = false
+        Rayfield:Notify({
+            Title = "Keybind Changed",
+            Content = "New aim key set to: " .. tostring(currentKeybind),
+            Duration = 3,
+            Image = nil,
+        })
+    end
+end)
+
+-- Create toggle for aim assist
+local AimAssistToggle = AutoTab:CreateToggle({
+    Name = "Aim Assist",
+    CurrentValue = false,
+    Flag = "AimAssistToggle",
+    Callback = function(Value)
+        _G.AimAssistEnabled = Value
+    end,
+})
+
+-- Create slider for smoothness
+local SmoothnessSlider = AutoTab:CreateSlider({
+    Name = "Smoothness",
+    Range = {0.05, 0.3},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.15,
+    Flag = "SmoothnessValue",
+    Callback = function(Value)
+        _G.Smoothness = Value
+    end,
+})
+
+-- Create slider for prediction
+local PredictionSlider = AutoTab:CreateSlider({
+    Name = "Prediction",
+    Range = {0, 0.2},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.08,
+    Flag = "PredictionValue",
+    Callback = function(Value)
+        _G.Prediction = Value
+    end,
+})
+
+-- Smooth aim function
+local function smoothAim(targetCFrame)
+    if aimTween then
+        aimTween:Cancel()
+    end
+    local tweenInfo = TweenInfo.new(_G.Smoothness or 0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+    aimTween = TS:Create(camera, tweenInfo, {CFrame = targetCFrame})
+    aimTween:Play()
+end
+
+-- Gets closest player with prediction
+function getClosest()
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+
+    local closestDistance = math.huge
+    local closestPlayer = nil
+    local localRoot = localPlayer.Character.HumanoidRootPart
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and (not player.Team or player.Team ~= localPlayer.Team) then
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local rootPart = character.HumanoidRootPart
+                local distance = (localRoot.Position - rootPart.Position).Magnitude
+                
+                -- Simple prediction: account for target velocity
+                local velocity = rootPart.Velocity
+                local predictedPosition = rootPart.Position + (velocity * (_G.Prediction or 0.08))
+                distance = (localRoot.Position - predictedPosition).Magnitude
+                
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+-- Main aim loop
+local function aimLoop()
+    while _G.aim and _G.AimAssistEnabled and task.wait() do
+        local closest = getClosest()
+        if closest and closest.Character and closest.Character:FindFirstChild("Head") then
+            local head = closest.Character.Head
+            lastTarget = closest
+            
+            -- Calculate direction with prediction
+            local velocity = closest.Character.HumanoidRootPart.Velocity
+            local predictedPosition = head.Position + (velocity * (_G.Prediction or 0.08))
+            
+            -- Create smooth CFrame looking at predicted position
+            local targetCFrame = CFrame.new(camera.CFrame.Position, predictedPosition)
+            smoothAim(targetCFrame)
+        end
+    end
+end
+
+-- Input handlers
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- Check if the input matches our current keybind
+    local isKeybindPressed = false
+    
+    -- Check for mouse buttons
+    if typeof(currentKeybind) == "EnumItem" and currentKeybind.EnumType == Enum.UserInputType then
+        isKeybindPressed = (input.UserInputType == currentKeybind)
+    -- Check for keyboard keys
+    elseif typeof(currentKeybind) == "EnumItem" and currentKeybind.EnumType == Enum.KeyCode then
+        isKeybindPressed = (input.KeyCode == currentKeybind)
+    end
+    
+    if isKeybindPressed and _G.AimAssistEnabled then
+        _G.aim = true
+        task.spawn(aimLoop)
+    end
+end)
+
+UIS.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    local isKeybindReleased = false
+    
+    -- Check for mouse buttons
+    if typeof(currentKeybind) == "EnumItem" and currentKeybind.EnumType == Enum.UserInputType then
+        isKeybindReleased = (input.UserInputType == currentKeybind)
+    -- Check for keyboard keys
+    elseif typeof(currentKeybind) == "EnumItem" and currentKeybind.EnumType == Enum.KeyCode then
+        isKeybindReleased = (input.KeyCode == currentKeybind)
+    end
+    
+    if isKeybindReleased then
+        _G.aim = false
+        if aimTween then
+            aimTween:Cancel()
+        end
+    end
+end)
+
+-- Silent Aim Section
+local silentAimSettings = {
+    Enabled = false,
+    ShowFOV = true,
+    FOVSize = 60,
+    FOVColor = Color3.new(1, 0, 0),
+    FOVTransparency = 0.5,
+    FOVFilled = false,
+    FOVThickness = 1,
+    FOVRainbowMode = false,
+    FOVRainbowSpeed = 1
+}
+
+local silentAimConnections = {}
+local fovCircle = nil
+
+-- Create FOV circle with rainbow support
+local function createFOV()
+    if not isDrawingSupported() then return end
+    
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = silentAimSettings.Enabled and silentAimSettings.ShowFOV
+    fovCircle.Color = silentAimSettings.FOVColor
+    fovCircle.Transparency = silentAimSettings.FOVTransparency
+    fovCircle.Filled = silentAimSettings.FOVFilled
+    fovCircle.Thickness = silentAimSettings.FOVThickness
+    fovCircle.Radius = silentAimSettings.FOVSize
+    fovCircle.Position = Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2)
+    
+    -- Rainbow effect for FOV circle
+    if silentAimSettings.FOVRainbowMode then
+        coroutine.wrap(function()
+            while fovCircle and silentAimSettings.FOVRainbowMode do
+                fovCircle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+                game:GetService("RunService").RenderStepped:Wait()
+            end
+        end)()
+    end
+end
+
+local function updateFOV()
+    if not fovCircle then return end
+    
+    fovCircle.Visible = silentAimSettings.Enabled and silentAimSettings.ShowFOV
+    if not silentAimSettings.FOVRainbowMode then
+        fovCircle.Color = silentAimSettings.FOVColor
+    end
+    fovCircle.Transparency = silentAimSettings.FOVTransparency
+    fovCircle.Filled = silentAimSettings.FOVFilled
+    fovCircle.Thickness = silentAimSettings.FOVThickness
+    fovCircle.Radius = silentAimSettings.FOVSize
+end
+
+-- Store flight-related variables outside the toggle for access
+local flying = false
+local flyConnection1, flyConnection2
+local flyBV
+local currentFlySpeed = 50 -- Default speed
+
+-- Create the speed slider first so it's available when the toggle is created
+local SpeedSlider = MainTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {1, 200},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = currentFlySpeed,
+    Flag = "FlySpeedSlider",
+    Callback = function(Value)
+        currentFlySpeed = Value
+    end,
+})
+
+local FlyToggle = MainTab:CreateToggle({
+    Name = "Fly (Press F to activate)",
+    CurrentValue = false,
+    Flag = "FlyToggle",
+    Callback = function(Value)
+        if not Value then
+            -- Clean up when toggle is turned off
+            if flyConnection1 then
+                flyConnection1:Disconnect()
+                flyConnection1 = nil
+            end
+            if flyConnection2 then
+                flyConnection2:Disconnect()
+                flyConnection2 = nil
+            end
+            
+            -- Reset flight state
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                    if humanoid.RootPart and humanoid.RootPart:FindFirstChild("FlyBV") then
+                        humanoid.RootPart.FlyBV:Destroy()
+                    end
+                end
+            end
+            flying = false
+            return
+        end
+        
+        -- Initialize flight system when toggle is on
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local humanoid = character:WaitForChild("Humanoid")
+
+        -- Toggle flying when F key is pressed
+        flyConnection1 = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+            if not gameProcessed and input.KeyCode == Enum.KeyCode.F then
+                flying = not flying
+                
+                if flying then
+                    humanoid.PlatformStand = true -- Allows for free movement
+                    -- Create a BodyVelocity for flight control
+                    flyBV = Instance.new("BodyVelocity")
+                    flyBV.Name = "FlyBV"
+                    flyBV.Velocity = Vector3.new(0, 0, 0)
+                    flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                    flyBV.P = 10000
+                    flyBV.Parent = humanoid.RootPart
+                else
+                    humanoid.PlatformStand = false
+                    -- Remove the BodyVelocity when not flying
+                    if flyBV then
+                        flyBV:Destroy()
+                        flyBV = nil
+                    end
+                end
+            end
+        end)
+
+        -- Flight control while flying
+        flyConnection2 = game:GetService("RunService").Heartbeat:Connect(function()
+            if flying and humanoid and humanoid.RootPart then
+                local root = humanoid.RootPart
+                local cam = workspace.CurrentCamera
+                
+                -- Get movement direction based on camera orientation
+                local forward = cam.CFrame.LookVector
+                local right = cam.CFrame.RightVector
+                local up = Vector3.new(0, 1, 0)
+                
+                local direction = Vector3.new(0, 0, 0)
+                
+                -- Check for movement inputs
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
+                    direction = direction + forward
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
+                    direction = direction - forward
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
+                    direction = direction + right
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
+                    direction = direction - right
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
+                    direction = direction + up
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) then
+                    direction = direction - up
+                end
+                
+                -- Normalize and apply speed
+                if direction.Magnitude > 0 then
+                    direction = direction.Unit * currentFlySpeed
+                end
+                
+                -- Apply velocity
+                if flyBV then
+                    flyBV.Velocity = direction
+                end
+            end
+        end)
+    end,
+})
+
+-- Configuration variables
+local bhopEnabled = false
+local noclipEnabled = false
+local bhopConnections = {}
+local noclipConnections = {}
+local bhopPower = 50
+local gravity = 150
+local movementSpeed = 100
+local lastJumpTime = 0
+local jumpCooldown = 0.2
+
+-- Create sections
+local SIGMABhop = MainTab:CreateSection("Bhop")
+
+
+-- BHop UI Elements
+local BhopPowerSlider = MainTab:CreateSlider({
+    Name = "BHop Power",
+    Range = {1, 200},
+    Increment = 1,
+    Suffix = " power",
+    CurrentValue = bhopPower,
+    Flag = "BhopPowerSlider",
+    Callback = function(Value)
+        bhopPower = Value
+    end,
+})
+
+local GravitySlider = MainTab:CreateSlider({
+    Name = "Gravity",
+    Range = {0, 500},
+    Increment = 1,
+    Suffix = " gravity",
+    CurrentValue = gravity,
+    Flag = "GravitySlider",
+    Callback = function(Value)
+        gravity = Value
+        if bhopEnabled and game.Players.LocalPlayer.Character then
+            local rootPart = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or game.Players.LocalPlayer.Character:FindFirstChild("Torso")
+            if rootPart and rootPart:FindFirstChild("BhopGravity") then
+                rootPart.BhopGravity.Force = Vector3.new(0, -gravity * rootPart:GetMass(), 0)
+            end
+        end
+    end,
+})
+
+local SpeedSlider = MainTab:CreateSlider({
+    Name = "Movement Speed",
+    Range = {50, 200},
+    Increment = 1,
+    Suffix = " speed",
+    CurrentValue = movementSpeed,
+    Flag = "SpeedSlider",
+    Callback = function(Value)
+        movementSpeed = Value
+    end,
+})
+
+local BhopToggle = MainTab:CreateToggle({
+    Name = "BHop (Press F to toggle)",
+    CurrentValue = false,
+    Flag = "BhopToggle",
+    Callback = function(Value)
+        bhopEnabled = Value
+        
+        if not Value then
+            -- Clean up BHop connections
+            for _, connection in pairs(bhopConnections) do
+                connection:Disconnect()
+            end
+            bhopConnections = {}
+            
+            -- Reset player state
+            if game.Players.LocalPlayer.Character then
+                local humanoid = game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                    local rootPart = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or game.Players.LocalPlayer.Character:FindFirstChild("Torso")
+                    if rootPart and rootPart:FindFirstChild("BhopGravity") then
+                        rootPart.BhopGravity:Destroy()
+                    end
+                end
+            end
+            return
+        end
+        
+        -- Initialize BHop system
+        local function setupBHop()
+            local character = game.Players.LocalPlayer.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+            if not humanoid or not rootPart then return end
+            
+            -- Create physics controller
+            local bodyForce = Instance.new("BodyForce")
+            bodyForce.Name = "BhopGravity"
+            bodyForce.Force = Vector3.new(0, -gravity * rootPart:GetMass(), 0)
+            bodyForce.Parent = rootPart
+            
+            -- Toggle with F key
+            table.insert(bhopConnections, game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+                if not gameProcessed and input.KeyCode == Enum.KeyCode.F then
+                    bhopEnabled = not bhopEnabled
+                    humanoid.PlatformStand = bhopEnabled
+                    Rayfield:Notify({
+                        Title = "BHop",
+                        Content = bhopEnabled and "Enabled" or "Disabled",
+                        Duration = 1,
+                    })
+                end
+            end))
+            
+            -- Jump handler
+            table.insert(bhopConnections, game:GetService("UserInputService").JumpRequest:Connect(function()
+                if bhopEnabled and (tick() - lastJumpTime) > jumpCooldown and rootPart then
+                    rootPart.Velocity = Vector3.new(rootPart.Velocity.X, bhopPower, rootPart.Velocity.Z)
+                    lastJumpTime = tick()
+                end
+            end))
+            
+            -- Movement handler
+            table.insert(bhopConnections, game:GetService("RunService").Heartbeat:Connect(function()
+                if bhopEnabled and humanoid and rootPart then
+                    -- Update gravity force
+                    if rootPart:FindFirstChild("BhopGravity") then
+                        rootPart.BhopGravity.Force = Vector3.new(0, -gravity * rootPart:GetMass(), 0)
+                    end
+                    
+                    -- Movement controls
+                    local cam = workspace.CurrentCamera
+                    local forward = cam.CFrame.LookVector
+                    local right = cam.CFrame.RightVector
+                    
+                    forward = Vector3.new(forward.X, 0, forward.Z).Unit
+                    right = Vector3.new(right.X, 0, right.Z).Unit
+                    
+                    local direction = Vector3.new(0, 0, 0)
+                    
+                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
+                        direction = direction + forward
+                    end
+                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
+                        direction = direction - forward
+                    end
+                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
+                        direction = direction + right
+                    end
+                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
+                        direction = direction - right
+                    end
+                    
+                    if direction.Magnitude > 0 then
+                        direction = direction.Unit * movementSpeed
+                        rootPart.Velocity = Vector3.new(direction.X, rootPart.Velocity.Y, direction.Z)
+                    else
+                        rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+                    end
+                end
+            end))
+        end
+        
+        -- Handle character loading
+        if game.Players.LocalPlayer.Character then
+            setupBHop()
+        end
+        table.insert(bhopConnections, game.Players.LocalPlayer.CharacterAdded:Connect(function()
+            if bhopEnabled then
+                setupBHop()
+            end
+        end))
+    end,
+})
+
+-- No clip sections
+local SIGMAClip = MainTab:CreateSection("NoClip")
+
+-- NoClip function
+local function noclipLoop()
+    if noclipEnabled and game.Players.LocalPlayer.Character then
+        for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
+    end
+end
+
+local NoclipToggle = MainTab:CreateToggle({
+    Name = "NoClip (Press N to toggle)",
+    CurrentValue = false,
+    Flag = "NoclipToggle",
+    Callback = function(Value)
+        noclipEnabled = Value
+        
+        if Value then
+            -- Enable NoClip
+            table.insert(noclipConnections, game:GetService("RunService").Stepped:Connect(noclipLoop))
+            
+            -- Toggle with N key
+            table.insert(noclipConnections, game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+                if not gameProcessed and input.KeyCode == Enum.KeyCode.N then
+                    noclipEnabled = not noclipEnabled
+                    Rayfield:Notify({
+                        Title = "NoClip",
+                        Content = noclipEnabled and "Enabled" or "Disabled",
+                        Duration = 1,
+                    })
+                end
+            end))
+        else
+            -- Disable NoClip and clean up connections
+            for _, connection in pairs(noclipConnections) do
+                connection:Disconnect()
+            end
+            noclipConnections = {}
+            
+            -- Restore collision
+            if game.Players.LocalPlayer.Character then
+                for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.CanCollide = true
+                    end
+                end
+            end
+        end
+    end,
+})
+
+-- Silent Aim Toggle
+local silentAimUI = MainTab:CreateSection("Silent Aim Settings")
+local SilentAimToggle = MainTab:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = silentAimSettings.Enabled,
+    Flag = "Toggle1",
+    Callback = function(Value)
+        silentAimSettings.Enabled = Value
+        
+        -- Clean up connections
+        for _, connection in ipairs(silentAimConnections) do
+            connection:Disconnect()
+        end
+        silentAimConnections = {}
+        
+        -- Handle FOV circle
+        if Value then
+            if not fovCircle then createFOV() else updateFOV() end
+        elseif fovCircle then
+            fovCircle.Visible = false
+        end
+        
+        if not Value then
+            -- Reset parts when disabling
+            local players = game:GetService("Players")
+            for _, player in pairs(players:GetPlayers()) do
+                if player ~= players.LocalPlayer and player.Character then
+                    for _, partName in ipairs({"RightUpperLeg","LeftUpperLeg","HeadHB","HumanoidRootPart"}) do
+                        local part = player.Character:FindFirstChild(partName)
+                        if part then
+                            part.Transparency = 0
+                            part.CanCollide = true
+                            part.Size = Vector3.new(1, 1, 1)
+                        end
+                    end
+                end
+            end
+            return
+        end
+        
+        -- Silent Aim functionality
+        local function modifyParts()
+            local players = game:GetService("Players")
+            local localPlayer = players.LocalPlayer
+            
+            for _, player in pairs(players:GetPlayers()) do
+                if player ~= localPlayer and player.Character then
+                    for _, partName in ipairs({"RightUpperLeg","LeftUpperLeg","HeadHB","HumanoidRootPart"}) do
+                        local part = player.Character:FindFirstChild(partName)
+                        if part then
+                            part.Transparency = 10
+                            part.CanCollide = false
+                            part.Size = Vector3.new(13, 13, 13)
+                        end
+                    end
+                end
+            end
+        end
+        
+        modifyParts()
+        
+        -- Set up connections
+        local players = game:GetService("Players")
+        
+        table.insert(silentAimConnections, players.PlayerAdded:Connect(function(player)
+            if not silentAimSettings.Enabled then return end
+            table.insert(silentAimConnections, player.CharacterAdded:Connect(function(character)
+                if not silentAimSettings.Enabled then return end
+                wait(1)
+                modifyParts()
+            end))
+        end))
+        
+        for _, player in pairs(players:GetPlayers()) do
+            if player ~= players.LocalPlayer then
+                table.insert(silentAimConnections, player.CharacterAdded:Connect(function(character)
+                    if not silentAimSettings.Enabled then return end
+                    wait(1)
+                    modifyParts()
+                end))
+            end
+        end
+        
+        table.insert(silentAimConnections, game:GetService("RunService").Heartbeat:Connect(function()
+            if not silentAimSettings.Enabled then return end
+            modifyParts()
+        end))
+    end,
+})
+
+-- FOV Controls
+MainTab:CreateToggle({
+    Name = "Show FOV Circle",
+    CurrentValue = silentAimSettings.ShowFOV,
+    Flag = "SilentAimShowFOV",
+    Callback = function(Value)
+        silentAimSettings.ShowFOV = Value
+        updateFOV()
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "FOV Size",
+    Range = {5, 200},
+    Increment = 5,
+    Suffix = "px",
+    CurrentValue = silentAimSettings.FOVSize,
+    Flag = "FOVSize",
+    Callback = function(Value)
+        silentAimSettings.FOVSize = Value
+        updateFOV()
+    end,
+})
+
+MainTab:CreateColorPicker({
+    Name = "FOV Color",
+    Color = silentAimSettings.FOVColor,
+    Flag = "FOVColor",
+    Callback = function(Value)
+        silentAimSettings.FOVColor = Value
+        if not silentAimSettings.FOVRainbowMode then
+            updateFOV()
+        end
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "FOV Transparency",
+    Range = {0, 1},
+    Increment = 0.05,
+    Suffix = "",
+    CurrentValue = silentAimSettings.FOVTransparency,
+    Flag = "FOVTransparency",
+    Callback = function(Value)
+        silentAimSettings.FOVTransparency = Value
+        updateFOV()
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "FOV Filled",
+    CurrentValue = silentAimSettings.FOVFilled,
+    Flag = "FOVFilled",
+    Callback = function(Value)
+        silentAimSettings.FOVFilled = Value
+        updateFOV()
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "FOV Thickness",
+    Range = {1, 5},
+    Increment = 1,
+    Suffix = "px",
+    CurrentValue = silentAimSettings.FOVThickness,
+    Flag = "FOVThickness",
+    Callback = function(Value)
+        silentAimSettings.FOVThickness = Value
+        updateFOV()
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "FOV Rainbow Mode",
+    CurrentValue = silentAimSettings.FOVRainbowMode,
+    Flag = "FOVRainbowMode",
+    Callback = function(Value)
+        silentAimSettings.FOVRainbowMode = Value
+        updateFOV()
+        if Value then
+            -- Restart rainbow effect
+            if fovCircle then
+                coroutine.wrap(function()
+                    while fovCircle and silentAimSettings.FOVRainbowMode do
+                        fovCircle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+                        game:GetService("RunService").RenderStepped:Wait()
+                    end
+                end)()
+            end
+        end
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "FOV Rainbow Speed",
+    Range = {0.5, 3},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = silentAimSettings.FOVRainbowSpeed,
+    Flag = "FOVRainbowSpeed",
+    Callback = function(Value)
+        silentAimSettings.FOVRainbowSpeed = Value
+    end,
+})
+
+local Teleportsection = MainTab:CreateSection("Teleport")
+
+-- Teleportation variables
+local teleporting = false
+local autoTeleport = false
+local teleportInterval = 2
+local teleportKeybind = "T"
+local teleportConnection = nil
+
+-- Cache services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Function to check if player is enemy (not on our team)
+local function isEnemy(player)
+    -- First check if game has teams
+    if game:FindFirstChild("Teams") then
+        local localTeam = LocalPlayer.Team
+        local playerTeam = player.Team
+        return localTeam ~= playerTeam
+    end
+    -- If no teams, everyone is enemy except yourself
+    return player ~= LocalPlayer
+end
+
+-- Function to get all enemies
+local function getEnemies()
+    local enemies = {}
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isEnemy(player) and player.Character then
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            
+            if humanoidRootPart and humanoid and humanoid.Health > 0 then
+                table.insert(enemies, player.Character)
+            end
+        end
+    end
+    
+    return enemies
+end
+
+-- Improved teleport function with team check
+local function teleportToRandomEnemy()
+    -- Validate local character
+    if not LocalPlayer.Character then 
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "Your character doesn't exist",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return false 
+    end
+    
+    local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then 
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "HumanoidRootPart not found",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return false 
+    end
+    
+    -- Get enemies not on our team
+    local enemies = getEnemies()
+    if #enemies == 0 then
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "No valid enemies found",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return false
+    end
+    
+    -- Select random enemy
+    local randomEnemy = enemies[math.random(1, #enemies)]
+    local enemyRoot = randomEnemy:FindFirstChild("HumanoidRootPart")
+    if not enemyRoot then return false end
+    
+    -- Teleport with offset and face same direction
+    local offset = Vector3.new(0, 3, 0)
+    humanoidRootPart.CFrame = CFrame.new(enemyRoot.Position + offset, enemyRoot.Position)
+    
+    Rayfield:Notify({
+        Title = "Teleport Success",
+        Content = "Teleported to enemy",
+        Duration = 1,
+        Image = 4483362458
+    })
+    return true
+end
+
+-- Teleportation variables
+local teleporting = false
+local autoTeleport = false
+local teleportDelay = 3 -- Default delay between auto-teleports
+local teleportKeybind = "T"
+local teleportConnection = nil
+local lastTeleportTime = 0
+local isTeleportingNow = false -- Prevents overlapping teleports
+
+-- Cache services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Function to check if player is enemy
+local function isEnemy(player)
+    if game:FindFirstChild("Teams") then
+        local localTeam = LocalPlayer.Team
+        local playerTeam = player.Team
+        return localTeam ~= playerTeam
+    end
+    return player ~= LocalPlayer
+end
+
+-- Function to get all enemies
+local function getEnemies()
+    local enemies = {}
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isEnemy(player) and player.Character then
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            
+            if humanoidRootPart and humanoid and humanoid.Health > 0 then
+                table.insert(enemies, player.Character)
+            end
+        end
+    end
+    
+    return enemies
+end
+
+-- Improved teleport function with proper timing
+local function teleportToRandomEnemy()
+    if isTeleportingNow then return false end
+    isTeleportingNow = true
+    
+    -- Anti-spam protection
+    local currentTime = os.clock()
+    if currentTime - lastTeleportTime < 0.5 then 
+        isTeleportingNow = false
+        return false 
+    end
+    lastTeleportTime = currentTime
+    
+    -- Validate local character
+    if not LocalPlayer.Character then 
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "Your character doesn't exist",
+            Duration = 3,
+            Image = 4483362458
+        })
+        isTeleportingNow = false
+        return false 
+    end
+    
+    local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then 
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "HumanoidRootPart not found",
+            Duration = 3,
+            Image = 4483362458
+        })
+        isTeleportingNow = false
+        return false 
+    end
+    
+    -- Get enemies not on our team
+    local enemies = getEnemies()
+    if #enemies == 0 then
+        Rayfield:Notify({
+            Title = "Teleport Failed",
+            Content = "No valid enemies found",
+            Duration = 3,
+            Image = 4483362458
+        })
+        isTeleportingNow = false
+        return false
+    end
+    
+    -- Select random enemy
+    local randomEnemy = enemies[math.random(1, #enemies)]
+    local enemyRoot = randomEnemy:FindFirstChild("HumanoidRootPart")
+    if not enemyRoot then 
+        isTeleportingNow = false
+        return false 
+    end
+    
+    -- Teleport with offset and face same direction
+    local offset = Vector3.new(0, 3, 0)
+    humanoidRootPart.CFrame = CFrame.new(enemyRoot.Position + offset, enemyRoot.Position)
+    
+    Rayfield:Notify({
+        Title = "Teleport Success",
+        Content = string.format("Teleported to enemy\nNext in: %.1fs", teleportDelay),
+        Duration = math.min(teleportDelay, 3), -- Show notification for delay time or max 3 seconds
+        Image = 4483362458
+    })
+    
+    isTeleportingNow = false
+    return true
+end
+
+local TeleportToggle = MainTab:CreateToggle({
+    Name = "Enable Teleport System",
+    CurrentValue = false,
+    Flag = "TeleportToggle",
+    Callback = function(Value)
+        teleporting = Value
+        if not Value and autoTeleport then
+            AutoTeleportToggle:Set(false)
+        end
+    end,
+})
+
+local TeleportKeybind = MainTab:CreateKeybind({
+    Name = "Teleport to Enemy (Current: "..teleportKeybind..")",
+    CurrentKeybind = teleportKeybind,
+    HoldToInteract = false,
+    Flag = "TeleportKeybind",
+    Callback = function(Keybind)
+        if teleporting then
+            teleportToRandomEnemy()
+        else
+            Rayfield:Notify({
+                Title = "System Disabled",
+                Content = "Enable the teleport system first",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+TeleportKeybind.OnKeybindChanged = function(newKeybind)
+    teleportKeybind = newKeybind
+    TeleportKeybind:Set({
+        Name = "Teleport to Enemy (Current: "..teleportKeybind..")"
+    })
+end
+
+local AutoTeleportToggle = MainTab:CreateToggle({
+    Name = "Auto Teleport to Enemies",
+    CurrentValue = false,
+    Flag = "AutoTeleportToggle",
+    Callback = function(Value)
+        autoTeleport = Value
+        
+        if teleportConnection then
+            teleportConnection:Disconnect()
+            teleportConnection = nil
+        end
+        
+        if autoTeleport and teleporting then
+            local lastTeleport = 0
+            teleportConnection = RunService.Heartbeat:Connect(function()
+                local now = os.clock()
+                if now - lastTeleport >= teleportDelay then
+                    teleportToRandomEnemy()
+                    lastTeleport = now
+                end
+            end)
+        end
+    end,
+})
+
+local TeleportDelaySlider = MainTab:CreateSlider({
+    Name = "Auto-Teleport Delay (seconds)",
+    Range = {1, 10}, -- 1 to 10 seconds range
+    Increment = 0.5,
+    Suffix = "s",
+    CurrentValue = teleportDelay,
+    Flag = "TeleportDelay",
+    Callback = function(Value)
+        teleportDelay = Value
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "Teleport Now",
+    Callback = function()
+        if teleporting then
+            teleportToRandomEnemy()
+        else
+            Rayfield:Notify({
+                Title = "System Disabled",
+                Content = "Enable the teleport system first",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+local Input = MainTab:CreateInput({
+    Name = "Player Username",
+    PlaceholderText = "Enter username",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        -- Store the input text in targetUsername
+        targetUsername = Text
+    end,
+})
+
+local Button = MainTab:CreateButton({
+    Name = "Teleport to Player",
+    Callback = function()
+        local players = game:GetService("Players")
+        local targetPlayer = players:FindFirstChild(targetUsername)
+        
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local localPlayer = players.LocalPlayer
+            if localPlayer.Character then
+                localPlayer.Character:MoveTo(targetPlayer.Character.HumanoidRootPart.Position)
+                Rayfield:Notify({
+                    Title = "Teleport Success",
+                    Content = "Teleported to "..targetUsername,
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Your character doesn't exist",
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Player not found or doesn't have character",
+                Duration = 3,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
+-- Screen resizing handler for FOV circle
+game:GetService("RunService").RenderStepped:Connect(function()
+    if fovCircle and silentAimSettings.Enabled and silentAimSettings.ShowFOV then
+        local viewportSize = workspace.CurrentCamera.ViewportSize
+        fovCircle.Position = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    end
+end)
+
+-- Cleanup
+Rayfield:DestroySignal():Connect(function()
+    for _, connection in ipairs(silentAimConnections) do
+        connection:Disconnect()
+    end
+    if fovCircle then
+        fovCircle:Remove()
+        fovCircle = nil
+    end
+    if toggleConnection then
+        toggleConnection:Disconnect()
+        toggleConnection = nil
+    end
+    if rainbowConnection then
+        rainbowConnection:Disconnect()
+    end
+    -- Clean up player connections
+    for player, connection in pairs(playerConnections) do
+        connection:Disconnect()
+    end
+    playerConnections = {}
+end)
